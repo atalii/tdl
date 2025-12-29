@@ -1,5 +1,5 @@
 use std::env;
-use tdl::Access;
+use tdl::tidal::Access;
 
 #[tokio::main]
 async fn main() {
