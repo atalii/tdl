@@ -1,5 +1,5 @@
 use std::env;
-use tdl::tidal::Access;
+use tdl::{fs::Dir, tidal::Access};
 
 use anyhow::{Context, Result};
 
@@ -18,8 +18,13 @@ async fn main() {
         let streaming_tok = env::var("TDL_BEARER_STREAMING")
             .with_context(|| "Failed to find $TDL_BEARER_STREAMING")?;
 
+        let fs = Dir::new("/tmp/tdl-store")
+            .await
+            .with_context(|| "Failed to create or find the store.")?;
+
         let access = Access::log_in(&client_id, &client_secret, &streaming_tok).await?;
-        access.download_track("441696040").await?;
+        let track = access.download_track("441696040").await?;
+        fs.add_music(track).await?;
 
         Ok(())
     }

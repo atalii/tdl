@@ -2,7 +2,7 @@ use base64::prelude::*;
 use metaflac::Tag;
 use reqwest::{self, header::HeaderValue};
 use serde::Deserialize;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use thiserror::Error;
 use tokio::io::AsyncWriteExt;
 
@@ -101,7 +101,7 @@ impl Access {
         })
     }
 
-    pub async fn download_track(&self, track_id: &str) -> Result<()> {
+    pub async fn download_track(&self, track_id: &str) -> Result<PathBuf> {
         let metadata = self.get_metadata(track_id).await?;
         let manifest = self.get_manifest(track_id).await?;
 
@@ -124,9 +124,9 @@ impl Access {
             // put it in an inside scope to close the file
         }
         child.wait().await.unwrap();
-        metadata.tag(o_path)?;
+        metadata.tag(&o_path)?;
 
-        Ok(())
+        Ok(o_path.into())
     }
 
     async fn get_metadata(&self, track_id: &str) -> Result<RelevantMetadata> {
