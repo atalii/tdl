@@ -2,6 +2,7 @@ use base64::prelude::*;
 use metaflac::Tag;
 use reqwest::{self, header::HeaderValue};
 use serde::Deserialize;
+use serde::Serialize;
 use std::path::{Path, PathBuf};
 use thiserror::Error;
 use tokio::io::AsyncWriteExt;
@@ -131,17 +132,10 @@ impl Access {
 
     async fn get_metadata(&self, track_id: &str) -> Result<RelevantMetadata> {
         let md = self
-            .client
-            .get(format!("https://openapi.tidal.com/v2/tracks/{track_id}"))
-            .bearer_auth(&self.api_creds.access_token)
-            .query(&[
-                ("countryCode", "US"),
-                ("include", "artists"),
-                ("include", "albums"),
-            ])
-            .send()
-            .await?
-            .text()
+            .send_api_req(
+                format!("tracks/{track_id}"), // TODO: track_id isn't necessarily URL-safe
+                &[("include", "artists"), ("include", "albums")],
+            )
             .await?;
 
         let serde_json::Value::Object(md) = serde_json::from_str(&md)? else {
@@ -160,15 +154,8 @@ impl Access {
             panic!("sigh");
         };
 
-        let album_md = self
-            .client
-            .get(format!("https://openapi.tidal.com/v2/albums/{album_id}"))
-            .bearer_auth(&self.api_creds.access_token)
-            .query(&[("countryCode", "US")])
-            .send()
-            .await?
-            .text()
-            .await?;
+        // TODO: album_id isn't necessarily URL-safe
+        let album_md = self.send_api_req(format!("albums/{album_id}"), &()).await?;
 
         let serde_json::Value::Object(album_md) = serde_json::from_str(&album_md)? else {
             todo!(":(")
@@ -192,15 +179,8 @@ impl Access {
             let serde_json::Value::String(id) = &artist["id"] else {
                 panic!("awf;elkj");
             };
-            let artist_md = self
-                .client
-                .get(format!("https://openapi.tidal.com/v2/artists/{id}"))
-                .bearer_auth(&self.api_creds.access_token)
-                .query(&[("countryCode", "US")])
-                .send()
-                .await?
-                .text()
-                .await?;
+            // TODO: id isn't url-safe
+            let artist_md = self.send_api_req(format!("artists/{id}"), &()).await?;
 
             let serde_json::Value::Object(artist_md) = serde_json::from_str(&artist_md)? else {
                 panic!("aweji");
@@ -239,5 +219,22 @@ impl Access {
         };
 
         Ok(BASE64_STANDARD.decode(manifest)?)
+    }
+
+    async fn send_api_req<Q: Serialize + ?Sized, S: AsRef<str>>(
+        &self,
+        slug: S,
+        query: &Q,
+    ) -> Result<String> {
+        Ok(self
+            .client
+            .get(format!("https://openapi.tidal.com/v2/{}", slug.as_ref()))
+            .bearer_auth(&self.api_creds.access_token)
+            .query(&[("countryCode", "US")])
+            .query(query)
+            .send()
+            .await?
+            .text()
+            .await?)
     }
 }
