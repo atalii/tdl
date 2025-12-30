@@ -226,7 +226,7 @@ impl Access {
     async fn get_manifest(&self, track_id: &str) -> Result<Vec<u8>> {
         let playback_info = self.client
             .get(format!("https://tidal.com/v1/tracks/{track_id}/playbackinfo?audioquality=HI_RES_LOSSLESS&playbackmode=STREAM&assetpresentation=FULL"))
-            .header("authorization", format!("Bearer {}", &self.streaming_creds.access_token))
+            .bearer_auth(&self.streaming_creds.access_token)
             .header("User-Agent", "i just wanna download music please don't block me@tali.network 🥺") // we get blocked if we don't set the UA :(
             .send()
             .await?
