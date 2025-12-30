@@ -11,8 +11,8 @@ use tokio::io::AsyncWriteExt;
 pub enum AccessError {
     #[error("A problem occurred while sending an HTTP request: {0}")]
     RequestError(#[from] reqwest::Error),
-    #[error("Response didn't deserialize: got: {1:?}. Error: {0}")]
-    DeserializationFailure(serde_json::Error, String),
+    #[error("Response wasn't typed as expected: {0}")]
+    DeserializationFailure(#[from] serde_json::Error),
     #[error("Expected a manifest in the following response: {0}")]
     ManifestExpected(serde_json::Value),
     #[error("Couldn't decode manifest's Base64: {0}")]
@@ -36,9 +36,8 @@ pub struct Access {
 #[derive(Debug, Deserialize)]
 struct ClientCredentials {
     access_token: String,
-    token_type: String,
-
     /// Number of seconds before expiry.
+    token_type: String,
     expires_in: u32,
 }
 
@@ -69,23 +68,8 @@ impl RelevantMetadata {
 }
 
 impl Access {
-    pub async fn log_in(
-        client_api_id: &str,
-        client_api_secret: &str,
-        client_id: &str,
-        client_secret: &str,
-    ) -> Result<Self> {
+    pub async fn log_in(client_id: &str, client_secret: &str, streaming_tok: &str) -> Result<Self> {
         let client = reqwest::Client::new();
-
-        let mut auth_header_api: HeaderValue = format!(
-            "Basic {}",
-            BASE64_STANDARD.encode(format!("{client_api_id}:{client_api_secret}"))
-        )
-        .try_into()
-        .expect("valid header value");
-
-        auth_header_api.set_sensitive(true);
-
         let mut auth_header: HeaderValue = format!(
             "Basic {}",
             BASE64_STANDARD.encode(format!("{client_id}:{client_secret}"))
@@ -97,16 +81,6 @@ impl Access {
 
         let api_creds_raw = client
             .post("https://auth.tidal.com/v1/oauth2/token")
-            .header("Authorization", auth_header_api)
-            .body("grant_type=client_credentials")
-            .header("Content-Type", "application/x-www-form-urlencoded")
-            .send()
-            .await?
-            .text()
-            .await?;
-
-        let creds_raw = client
-            .post("https://auth.tidal.com/v1/oauth2/token")
             .header("Authorization", auth_header)
             .body("grant_type=client_credentials")
             .header("Content-Type", "application/x-www-form-urlencoded")
@@ -115,16 +89,16 @@ impl Access {
             .text()
             .await?;
 
-        let api_creds: ClientCredentials = serde_json::from_str(&api_creds_raw)
-            .map_err(|e| AccessError::DeserializationFailure(e, api_creds_raw.to_string()))?;
-
-        let streaming_creds: ClientCredentials = serde_json::from_str(&creds_raw)
-            .map_err(|e| AccessError::DeserializationFailure(e, creds_raw.to_string()))?;
+        let api_creds: ClientCredentials = serde_json::from_str(&api_creds_raw)?;
 
         Ok(Self {
             client,
             api_creds,
-            streaming_creds,
+            streaming_creds: ClientCredentials {
+                access_token: streaming_tok.to_string(),
+                token_type: "Bearer".to_string(),
+                expires_in: 14400, // default; just a guess
+            },
         })
     }
 
@@ -132,9 +106,7 @@ impl Access {
         let album_md = self
             .send_api_req(format!("albums/{album_id}/relationships/items"), &())
             .await?;
-        let serde_json::Value::Object(album_md) = serde_json::from_str(&album_md)
-            .map_err(|e| AccessError::DeserializationFailure(e, album_md.to_string()))?
-        else {
+        let serde_json::Value::Object(album_md) = serde_json::from_str(&album_md)? else {
             todo!()
         };
 
@@ -198,9 +170,7 @@ impl Access {
             )
             .await?;
 
-        let serde_json::Value::Object(md) = serde_json::from_str(&md)
-            .map_err(|e| AccessError::DeserializationFailure(e, md.to_string()))?
-        else {
+        let serde_json::Value::Object(md) = serde_json::from_str(&md)? else {
             todo!()
         };
 
@@ -219,9 +189,7 @@ impl Access {
         // TODO: album_id isn't necessarily URL-safe
         let album_md = self.send_api_req(format!("albums/{album_id}"), &()).await?;
 
-        let serde_json::Value::Object(album_md) = serde_json::from_str(&album_md)
-            .map_err(|e| AccessError::DeserializationFailure(e, album_md.to_string()))?
-        else {
+        let serde_json::Value::Object(album_md) = serde_json::from_str(&album_md)? else {
             todo!(":(")
         };
 
@@ -246,9 +214,7 @@ impl Access {
             // TODO: id isn't url-safe
             let artist_md = self.send_api_req(format!("artists/{id}"), &()).await?;
 
-            let serde_json::Value::Object(artist_md) = serde_json::from_str(&artist_md)
-                .map_err(|e| AccessError::DeserializationFailure(e, artist_md.to_string()))?
-            else {
+            let serde_json::Value::Object(artist_md) = serde_json::from_str(&artist_md)? else {
                 panic!("aweji");
             };
 
@@ -279,9 +245,7 @@ impl Access {
             .text()
             .await?;
 
-        let playback_info: serde_json::Value = serde_json::from_str(&playback_info)
-            .map_err(|e| AccessError::DeserializationFailure(e, playback_info.to_string()))?;
-
+        let playback_info: serde_json::Value = serde_json::from_str(&playback_info)?;
         let serde_json::Value::String(manifest) = &playback_info["manifest"] else {
             return Err(AccessError::ManifestExpected(playback_info));
         };
