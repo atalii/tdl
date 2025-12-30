@@ -14,14 +14,24 @@ impl Runner {
             env::var("TDL_CLIENT_ID").with_context(|| "Failed to find $TDL_CLIENT_ID")?;
         let client_secret =
             env::var("TDL_CLIENT_SECRET").with_context(|| "Failed to find $TDL_CLIENT_SECRET")?;
-        let streaming_tok = env::var("TDL_BEARER_STREAMING")
-            .with_context(|| "Failed to find $TDL_BEARER_STREAMING")?;
+
+        let api_client_id =
+            env::var("TDL_API_CLIENT_ID").with_context(|| "Failed to find $TDL_API_CLIENT_ID")?;
+        let api_client_secret = env::var("TDL_API_CLIENT_SECRET")
+            .with_context(|| "Failed to find $TDL_API_CLIENT_SECRET")?;
+
+        let api = Access::log_in(
+            &api_client_id,
+            &api_client_secret,
+            &client_id,
+            &client_secret,
+        )
+        .await?;
 
         let fs = Dir::new("/tmp/tdl-store")
             .await
             .with_context(|| "Failed to create or find the store")?;
 
-        let api = Access::log_in(&client_id, &client_secret, &streaming_tok).await?;
         Ok(Self { fs, api })
     }
 
