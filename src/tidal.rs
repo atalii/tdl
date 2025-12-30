@@ -102,8 +102,40 @@ impl Access {
         })
     }
 
-    pub async fn download_track(&self, track_id: &str) -> Result<PathBuf> {
-        let metadata = self.get_metadata(track_id).await?;
+    pub async fn get_tracks(&self, album_id: &str) -> Result<Vec<String>> {
+        let album_md = self
+            .send_api_req(format!("albums/{album_id}/relationships/items"), &())
+            .await?;
+        let serde_json::Value::Object(album_md) = serde_json::from_str(&album_md)? else {
+            todo!()
+        };
+
+        let serde_json::Value::Array(album_md) = &album_md["data"] else {
+            todo!()
+        };
+
+        Ok(album_md
+            .into_iter()
+            .map(|item| {
+                let serde_json::Value::Object(item) = item else {
+                    todo!()
+                };
+                let serde_json::Value::String(id) = &item["id"] else {
+                    todo!()
+                };
+                id.clone()
+            })
+            .collect())
+    }
+
+    pub async fn download_track(
+        &self,
+        track_id: &str,
+        track_number: Option<u16>,
+    ) -> Result<PathBuf> {
+        let mut metadata = self.get_metadata(track_id).await?;
+        metadata.track_number = track_number;
+
         let manifest = self.get_manifest(track_id).await?;
 
         let o_path = format!("/tmp/{track_id}.flac");

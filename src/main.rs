@@ -23,8 +23,14 @@ async fn main() {
             .with_context(|| "Failed to create or find the store.")?;
 
         let access = Access::log_in(&client_id, &client_secret, &streaming_tok).await?;
-        let track = access.download_track("441696040").await?;
-        fs.add_music(track).await?;
+
+        let tracks = access.get_tracks("109100968").await?;
+        eprintln!("{tracks:?}");
+
+        for (n, ref track) in tracks.into_iter().enumerate() {
+            let track = access.download_track(track, Some(n as u16)).await?;
+            fs.add_music(track).await?;
+        }
 
         Ok(())
     }
