@@ -1,7 +1,7 @@
 use crate::{fs::Dir, tidal::Access};
-use std::{env, path::PathBuf};
+use std::{env, path::PathBuf, str::FromStr};
 
-use anyhow::{Context, Result};
+use anyhow::{Context, Result, anyhow, bail};
 
 pub struct Runner {
     fs: Dir,
@@ -69,6 +69,49 @@ impl Runner {
                 .with_context(|| format!("Failed to save album: {}", album.as_ref()))?;
         }
 
+        Ok(())
+    }
+
+    pub async fn repl(&self) -> Result<()> {
+        use rustyline::{DefaultEditor, error::ReadlineError};
+        let mut rl = DefaultEditor::new()?;
+
+        loop {
+            match rl.readline("𝄞 ") {
+                Ok(x) => {
+                    if let Err(e) = self.run_cmd(&x).await {
+                        eprintln!("{:?}", e);
+                    }
+                }
+                Err(ReadlineError::Eof) => break,
+                Err(ReadlineError::Interrupted) => (),
+                Err(e) => eprintln!("{:?}", e),
+            }
+        }
+
+        eprintln!("goodbye :)!");
+        Ok(())
+    }
+
+    async fn run_cmd(&self, cmdline: &str) -> Result<()> {
+        let mut cmdline = cmdline.split_whitespace();
+        let cmd = cmdline.next().ok_or(anyhow!("No command supplied."))?;
+        match cmd {
+            "track" => {
+                let target = cmdline.next().ok_or(anyhow!("No target supplied."))?;
+                let index = match cmdline.next() {
+                    Some(x) => Some(u16::from_str(x)?),
+                    None => None,
+                };
+
+                self.fetch_track(target, index).await?;
+            }
+            "album" => {
+                let target = cmdline.next().ok_or(anyhow!("No target supplied."))?;
+                self.fetch_album(target).await?;
+            }
+            x => bail!("Unknown command: {x}"),
+        }
         Ok(())
     }
 }

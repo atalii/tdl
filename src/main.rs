@@ -10,7 +10,7 @@ async fn main() {
 
     async fn inner() -> Result<()> {
         let runner = runner::Runner::new().await?;
-        runner.fetch_album("422567306").await?;
+        runner.repl().await?;
 
         Ok(())
     }
