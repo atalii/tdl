@@ -128,17 +128,17 @@ impl Access {
             .collect())
     }
 
-    pub async fn download_track(
+    pub async fn download_track<T: AsRef<str>>(
         &self,
-        track_id: &str,
+        track_id: T,
         track_number: Option<u16>,
     ) -> Result<PathBuf> {
-        let mut metadata = self.get_metadata(track_id).await?;
+        let mut metadata = self.get_metadata(&track_id).await?;
         metadata.track_number = track_number;
 
-        let manifest = self.get_manifest(track_id).await?;
+        let manifest = self.get_manifest(&track_id).await?;
 
-        let o_path = format!("/tmp/{track_id}.flac");
+        let o_path = format!("/tmp/{}.flac", &track_id.as_ref());
         let mut child = tokio::process::Command::new("ffmpeg")
             .arg("-protocol_whitelist")
             .arg("fd,file,https,tcp,tls")
@@ -162,10 +162,10 @@ impl Access {
         Ok(o_path.into())
     }
 
-    async fn get_metadata(&self, track_id: &str) -> Result<RelevantMetadata> {
+    async fn get_metadata<T: AsRef<str>>(&self, track_id: T) -> Result<RelevantMetadata> {
         let md = self
             .send_api_req(
-                format!("tracks/{track_id}"), // TODO: track_id isn't necessarily URL-safe
+                format!("tracks/{}", track_id.as_ref()), // TODO: track_id isn't necessarily URL-safe
                 &[("include", "artists"), ("include", "albums")],
             )
             .await?;
@@ -235,9 +235,9 @@ impl Access {
         })
     }
 
-    async fn get_manifest(&self, track_id: &str) -> Result<Vec<u8>> {
+    async fn get_manifest<T: AsRef<str>>(&self, track_id: T) -> Result<Vec<u8>> {
         let playback_info = self.client
-            .get(format!("https://tidal.com/v1/tracks/{track_id}/playbackinfo?audioquality=HI_RES_LOSSLESS&playbackmode=STREAM&assetpresentation=FULL"))
+            .get(format!("https://tidal.com/v1/tracks/{}/playbackinfo?audioquality=HI_RES_LOSSLESS&playbackmode=STREAM&assetpresentation=FULL", track_id.as_ref()))
             .bearer_auth(&self.streaming_creds.access_token)
             .header("User-Agent", "i just wanna download music please don't block me@tali.network 🥺") // we get blocked if we don't set the UA :(
             .send()
