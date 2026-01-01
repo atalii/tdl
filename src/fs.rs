@@ -41,26 +41,27 @@ impl Dir {
         let tags = Tag::read_from_path(track.as_ref())
             .map_err(|e| FsError::CantReadTags(track.as_ref().to_owned(), e))?;
 
-        let album = tags
-            .get_vorbis("album")
-            .ok_or(FsError::MissingAlbum(track.as_ref().to_owned()))?
-            .next()
-            .ok_or(FsError::MissingAlbum(track.as_ref().to_owned()))?;
+        let album = sanitize(
+            tags.get_vorbis("album")
+                .ok_or(FsError::MissingAlbum(track.as_ref().to_owned()))?
+                .next()
+                .ok_or(FsError::MissingAlbum(track.as_ref().to_owned()))?,
+        );
 
-        let artist = tags
-            .get_vorbis("artist")
-            .ok_or(FsError::MissingArtist(track.as_ref().to_owned()))?
-            .next()
-            .ok_or(FsError::MissingArtist(track.as_ref().to_owned()))?;
+        let artist = sanitize(
+            tags.get_vorbis("artist")
+                .ok_or(FsError::MissingArtist(track.as_ref().to_owned()))?
+                .next()
+                .ok_or(FsError::MissingArtist(track.as_ref().to_owned()))?,
+        );
 
-        let title = tags
-            .get_vorbis("title")
-            .ok_or(FsError::MissingTitle(track.as_ref().to_owned()))?
-            .next()
-            .ok_or(FsError::MissingTitle(track.as_ref().to_owned()))?;
+        let title = sanitize(
+            tags.get_vorbis("title")
+                .ok_or(FsError::MissingTitle(track.as_ref().to_owned()))?
+                .next()
+                .ok_or(FsError::MissingTitle(track.as_ref().to_owned()))?,
+        );
 
-        // XXX: This is a vulnerability if album, title, or artist contain slashes. It's also super
-        // brittle if the title contains a period (and therefore a 'file extension').
         let dst_dir = self.root.join(artist).join(album);
         let dst = dst_dir.join(title).with_extension("flac");
 
@@ -74,5 +75,13 @@ impl Dir {
             .map_err(|e| FsError::CantCopyTrack(dst.clone(), e))?;
 
         Ok(())
+    }
+}
+
+fn sanitize<T: AsRef<str>>(x: T) -> String {
+    match x.as_ref() {
+        "." => "_".to_string(),
+        ".." => "__".to_string(),
+        x => x.replace(&['/', '\\'], ""),
     }
 }
