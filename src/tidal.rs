@@ -55,8 +55,8 @@ impl RelevantMetadata {
         let mut tag = Tag::read_from_path(path)?;
         tag.set_vorbis("title", vec![&self.title]);
 
-        let artist_tag = self.artists.join("; ");
-        tag.set_vorbis("artist", vec![artist_tag]);
+        let artists = self.artists.iter().collect(); // .iter().collect looks redundant, but borrows data
+        tag.set_vorbis("artist", artists);
         tag.set_vorbis("album", vec![&self.album]);
         if let Some(tn) = self.track_number {
             tag.set_vorbis("track", vec![format!("{tn}")]);
