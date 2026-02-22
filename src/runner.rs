@@ -30,7 +30,7 @@ impl Runner {
             .api
             .download_track(&track, num)
             .await
-            .with_context(|| format!("Failed to downnload track: {}", track.as_ref()))?;
+            .with_context(|| format!("Failed to download track: {}", track.as_ref()))?;
 
         self.fs
             .add_music(&track)
