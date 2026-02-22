@@ -1,4 +1,5 @@
 use base64::prelude::*;
+use log;
 use metaflac::Tag;
 use reqwest::{self, header::HeaderValue};
 use serde::Deserialize;
@@ -188,6 +189,7 @@ impl Access {
 
         // TODO: album_id isn't necessarily URL-safe
         let album_md = self.send_api_req(format!("albums/{album_id}"), &()).await?;
+        log::debug!("Album metadata: {:?}", album_md);
 
         let serde_json::Value::Object(album_md) = serde_json::from_str(&album_md)? else {
             todo!(":(")
