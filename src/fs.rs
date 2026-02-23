@@ -63,7 +63,7 @@ impl Dir {
         );
 
         let dst_dir = self.root.join(artist).join(album);
-        let dst = dst_dir.join(title).with_extension("flac");
+        let dst = dst_dir.join(title).with_added_extension("flac");
 
         tokio::fs::create_dir_all(&dst_dir)
             .await
