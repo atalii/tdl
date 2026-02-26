@@ -12,4 +12,6 @@ pkgs.mkShell {
     pkg-config
     openssl
   ];
+
+  RUST_LOG = "tdl";
 }

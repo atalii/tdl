@@ -107,6 +107,9 @@ impl Access {
         let album_md = self
             .send_api_req(format!("albums/{album_id}/relationships/items"), &())
             .await?;
+
+        log::trace!("found items for album: {album_id}: {album_md}");
+
         let serde_json::Value::Object(album_md) = serde_json::from_str(&album_md)? else {
             todo!()
         };

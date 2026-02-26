@@ -47,6 +47,8 @@ impl Runner {
             .await
             .with_context(|| format!("Failed to find tracks in album: {}", album.as_ref()))?;
 
+        log::debug!("found tracks: {:?}", tracks);
+
         for (n, ref track) in tracks.into_iter().enumerate() {
             let track = self
                 .fetch_track(track, Some((n + 1) as u16))
