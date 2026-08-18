@@ -1,9 +1,10 @@
 use base64::prelude::*;
 use log;
 use metaflac::Tag;
-use reqwest::{self, header::HeaderValue};
+use reqwest;
 use serde::Deserialize;
 use serde::Serialize;
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use thiserror::Error;
 use tokio::io::AsyncWriteExt;
@@ -50,6 +51,29 @@ struct RelevantMetadata {
     track_number: Option<u16>,
 }
 
+impl ClientCredentials {
+    pub async fn log_in(client_id: &str, client_secret: &str) -> Result<Self> {
+        let client = reqwest::Client::new();
+
+        let mut params = HashMap::new();
+        params.insert("grant_type", "client_credentials");
+        params.insert("client_id", client_id);
+        params.insert("client_secret", client_secret);
+
+        let api_creds_raw = client
+            .post("https://auth.tidal.com/v1/oauth2/token")
+            .form(&params)
+            .send()
+            .await?
+            .text()
+            .await?;
+
+        dbg!(&api_creds_raw);
+
+        Ok(serde_json::from_str(&api_creds_raw)?)
+    }
+}
+
 impl RelevantMetadata {
     pub fn tag<P: AsRef<Path>>(&self, path: P) -> Result<()> {
         let mut tag = Tag::read_from_path(path)?;
@@ -71,26 +95,8 @@ impl RelevantMetadata {
 impl Access {
     pub async fn log_in(client_id: &str, client_secret: &str, streaming_tok: &str) -> Result<Self> {
         let client = reqwest::Client::new();
-        let mut auth_header: HeaderValue = format!(
-            "Basic {}",
-            BASE64_STANDARD.encode(format!("{client_id}:{client_secret}"))
-        )
-        .try_into()
-        .expect("valid header value");
 
-        auth_header.set_sensitive(true);
-
-        let api_creds_raw = client
-            .post("https://auth.tidal.com/v1/oauth2/token")
-            .header("Authorization", auth_header)
-            .body("grant_type=client_credentials")
-            .header("Content-Type", "application/x-www-form-urlencoded")
-            .send()
-            .await?
-            .text()
-            .await?;
-
-        let api_creds: ClientCredentials = serde_json::from_str(&api_creds_raw)?;
+        let api_creds = ClientCredentials::log_in(client_id, client_secret).await?;
 
         Ok(Self {
             client,
