@@ -13,6 +13,7 @@ async fn main() {
 
     async fn inner() -> Result<()> {
         let runner = runner::Runner::new().await?;
+        runner.run_refresh().await?;
         runner.repl().await?;
 
         Ok(())

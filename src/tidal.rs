@@ -68,9 +68,46 @@ impl ClientCredentials {
             .text()
             .await?;
 
-        dbg!(&api_creds_raw);
-
         Ok(serde_json::from_str(&api_creds_raw)?)
+    }
+
+    pub async fn refresh(&mut self, refresh_token: &str, client_id: &str) -> Result<String> {
+        let client = reqwest::Client::new();
+
+        let mut params = HashMap::new();
+        params.insert("grant_type", "refresh_token");
+        params.insert("refresh_token", refresh_token);
+        params.insert("client_id", client_id);
+        params.insert("scope", "r_usr");
+
+        let rsp_raw = dbg!(
+            client
+                .post("https://auth.tidal.com/v1/oauth2/token")
+                .form(&params)
+                .bearer_auth(&self.access_token)
+                .send()
+                .await?
+        )
+        .text()
+        .await?;
+
+        dbg!(&rsp_raw);
+
+        let resp: serde_json::Value = serde_json::from_str(&rsp_raw)?;
+        let serde_json::Value::String(new_rf_token) = &resp["refresh_token"] else {
+            panic!("refresh failed; refresh token missing in response");
+        };
+
+        let new_ac_token = match &resp["access_token"] {
+            serde_json::Value::String(t) => t,
+            _ => {
+                log::warn!("Missing refresh_token in response.");
+                refresh_token
+            }
+        };
+
+        self.access_token = new_ac_token.into();
+        return Ok(new_rf_token.into());
     }
 }
 
@@ -107,6 +144,10 @@ impl Access {
                 expires_in: 14400, // default; just a guess
             },
         })
+    }
+
+    pub async fn refresh(&mut self, refresh_token: &str, client_id: &str) -> Result<String> {
+        self.streaming_creds.refresh(refresh_token, client_id).await
     }
 
     pub async fn get_tracks(&self, album_id: &str) -> Result<Vec<String>> {

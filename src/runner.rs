@@ -1,11 +1,12 @@
 use crate::{fs::Dir, tidal::Access};
-use std::{env, path::PathBuf, str::FromStr};
+use std::{env, path::PathBuf, str::FromStr, sync::Arc, time::Duration};
 
 use anyhow::{Context, Result, anyhow, bail};
+use tokio::sync::Mutex;
 
 pub struct Runner {
     fs: Dir,
-    api: Access,
+    api: Arc<Mutex<Access>>,
 }
 
 impl Runner {
@@ -22,12 +23,37 @@ impl Runner {
             .with_context(|| "Failed to create or find the store")?;
 
         let api = Access::log_in(&client_id, &client_secret, &streaming_tok).await?;
+        let api = Arc::new(Mutex::new(api));
         Ok(Self { fs, api })
     }
 
+    pub async fn run_refresh(&self) -> Result<()> {
+        let mut refresh_token = env::var("TDL_CLIENT_REFRESH_STREAMING")
+            .with_context(|| "Failed to find $TDL_CLIENT_REFRESH_STREAMING")?
+            .to_string();
+        let client_id = env::var("TDL_CLIENT_ID_STREAMING")
+            .with_context(|| "Failed to find $TDL_CLIENT_ID_STREAMING")?
+            .to_string();
+        let api_lock = self.api.clone();
+        tokio::spawn(async move {
+            loop {
+                tokio::time::sleep(Duration::from_hours(1)).await;
+                let mut api = api_lock.lock().await;
+                match api.refresh(&refresh_token, &client_id).await {
+                    Err(e) => log::warn!("Couldn't refresh token: {e}"),
+                    Ok(r) => {
+                        refresh_token = r;
+                    }
+                }
+            }
+        });
+
+        Ok(())
+    }
+
     pub async fn fetch_track<T: AsRef<str>>(&self, track: T, num: Option<u16>) -> Result<PathBuf> {
-        let track = self
-            .api
+        let api = self.api.lock().await;
+        let track = api
             .download_track(&track, num)
             .await
             .with_context(|| format!("Failed to download track: {}", track.as_ref()))?;
@@ -41,8 +67,8 @@ impl Runner {
     }
 
     pub async fn fetch_album<T: AsRef<str>>(&self, album: T) -> Result<()> {
-        let tracks = self
-            .api
+        let api = self.api.lock().await;
+        let tracks = api
             .get_tracks(album.as_ref())
             .await
             .with_context(|| format!("Failed to find tracks in album: {}", album.as_ref()))?;
